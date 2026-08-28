@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gribo-Popoli — Carte du bornage et de la clarification foncière</title>
+  <meta name="description" content="Carte interactive des bornes du réservoir, de la parcelle GN-001 et des ayants droit de Soubouo — aménagement hydroélectrique de Gribo-Popoli." />
+
+  <!-- Leaflet + MarkerCluster (CDN, sans clé API) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ========== BARRE SUPÉRIEURE ========== -->
+    <header class="topbar">
+      <div class="brand">
+        <button class="icon-btn burger" id="btn-sidebar" type="button" aria-label="Ouvrir le panneau">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="brand-mark" aria-hidden="true">
+          <!-- Pictogramme barrage / retenue -->
+          <svg viewBox="0 0 40 40" width="36" height="36">
+            <rect x="2" y="2" width="36" height="36" rx="8" fill="#1a332c"/>
+            <path d="M8 24h24v4H8z" fill="#c4a35a"/>
+            <path d="M10 16h4v8h-4zm8-6h4v14h-4zm8 4h4v10h-4z" fill="#7fd1c3"/>
+            <path d="M8 28c3 3 7 4 12 4s9-1 12-4" fill="none" stroke="#4aa3c7" stroke-width="1.6"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Gribo-Popoli</h1>
+          <p>Bornage du réservoir · Clarification foncière</p>
+        </div>
+      </div>
+
+      <nav class="view-switch" role="tablist" aria-label="Vues">
+        <button class="is-active" data-view="map" type="button" role="tab" aria-selected="true">Carte</button>
+        <button data-view="ayants" type="button" role="tab" aria-selected="false">Ayants droit</button>
+        <button data-view="info" type="button" role="tab" aria-selected="false">Données</button>
+      </nav>
+
+      <div class="top-stats" id="top-stats"></div>
+    </header>
+
+    <!-- ========== VUE CARTE ========== -->
+    <div class="workspace is-active" id="view-map">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-search">
+          <label class="sr-only" for="search">Rechercher</label>
+          <input id="search" type="search" placeholder="Borne, nom, code, village…" autocomplete="off" />
+          <button type="button" id="btn-clear-search" class="clear-x" hidden aria-label="Effacer">×</button>
+        </div>
+
+        <div class="filters" id="filters">
+          <button class="chip is-active" data-cat="all" type="button">Tout</button>
+          <button class="chip" data-cat="borne" type="button">Bornes</button>
+          <button class="chip" data-cat="parcelle" type="button">Parcelle</button>
+          <button class="chip" data-cat="infrastructure" type="button">Sites</button>
+        </div>
+
+        <div class="layers">
+          <p class="layers-title">Couches</p>
+          <label><input type="checkbox" id="ly-bornes" checked /> Bornes construites</label>
+          <label><input type="checkbox" id="ly-parcelle" checked /> Parcelle GN-001</label>
+          <label><input type="checkbox" id="ly-sites" checked /> Infrastructures</label>
+        </div>
+
+        <div class="list-meta">
+          <span id="list-count">—</span>
+          <button type="button" id="btn-fit" class="linkish">Recadrer</button>
+        </div>
+
+        <div class="place-list" id="place-list" role="list"></div>
+      </aside>
+
+      <main class="map-wrap">
+        <div id="map" role="application" aria-label="Carte du projet Gribo-Popoli"></div>
+
+        <div class="map-tools">
+          <div class="basemap-switch" role="group" aria-label="Fond de carte">
+            <button type="button" data-basemap="satellite" class="is-active">Satellite</button>
+            <button type="button" data-basemap="osm">Plan</button>
+            <button type="button" data-basemap="light">Clair</button>
+          </div>
+          <button type="button" id="btn-geojson" class="tool-btn" title="Télécharger les bornes en GeoJSON">GeoJSON</button>
+        </div>
+
+        <div class="legend" id="legend">
+          <p class="legend-title">Légende</p>
+          <div><span class="dot gold"></span> Borne construite</div>
+          <div><span class="dot teal"></span> Sommet de parcelle</div>
+          <div><span class="swatch poly"></span> Parcelle GN-001</div>
+          <div><span class="dot dam"></span> Barrage / site</div>
+        </div>
+
+        <div class="coord-readout" id="coord-readout">WGS84 · UTM 29N</div>
+      </main>
+
+      <!-- Panneau de détail (desktop à droite, mobile en feuille) -->
+      <aside class="detail" id="detail" hidden>
+        <button type="button" class="detail-close" id="detail-close" aria-label="Fermer">×</button>
+        <div id="detail-body"></div>
+      </aside>
+    </div>
+
+    <!-- ========== VUE AYANTS DROIT ========== -->
+    <section class="workspace" id="view-ayants" hidden>
+      <div class="table-toolbar">
+        <div>
+          <h2>Exploitants et détenteurs — territoire de Soubouo</h2>
+          <p>Listing BNETD-CIGN · novembre 2018 · indemnisation en espèce · pas de titre sur les parcelles</p>
+        </div>
+        <div class="table-tools">
+          <input id="ayants-search" type="search" placeholder="Nom, code SO-…, héritier, culture…" />
+          <select id="ayants-residence" aria-label="Filtrer par résidence">
+            <option value="">Toutes résidences</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table" id="ayants-table">
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Code</th>
+              <th>Occupant</th>
+              <th>Résidence</th>
+              <th>Superficie</th>
+              <th>Culture</th>
+              <th>Héritiers</th>
+              <th>Droit coutumier</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="table-foot" id="ayants-foot"></div>
+    </section>
+
+    <!-- ========== VUE MÉTADONNÉES ========== -->
+    <section class="workspace" id="view-info" hidden>
+      <article class="info-card">
+        <h2>Données extraites des documents sources</h2>
+        <p class="lede">
+          Projet d’aménagement hydroélectrique de <strong>Gribo-Popoli</strong> (112&nbsp;MW) sur le
+          fleuve Sassandra, en aval du barrage de Soubré. Maître d’ouvrage&nbsp;: CI-ENERGIES.
+          Opérateur technique du bornage et de la clarification foncière&nbsp;: BNETD / CIGN.
+        </p>
+
+        <h3>Système de coordonnées</h3>
+        <ul>
+          <li>Géographiques affichées&nbsp;: <strong>WGS84</strong> (EPSG:4326), latitude / longitude décimales.</li>
+          <li>Projection d’origine&nbsp;: <strong>UTM WGS84 fuseau 29 Nord</strong> (EPSG:32629), X = Easting, Y = Northing.</li>
+          <li>
+            Les colonnes du PDF «&nbsp;Listing des coordonnées des bornes&nbsp;» intitulées
+            LONGITUDE et LATITUDE sont <strong>inversées</strong>. La conversion s’appuie sur les
+            suffixes d’hémisphère&nbsp;: <em>N</em> = latitude, <em>O</em> = longitude ouest.
+          </li>
+        </ul>
+
+        <h3>Fichiers utilisés</h3>
+        <ul id="info-sources"></ul>
+
+        <h3>Points d’attention</h3>
+        <ul>
+          <li>450 bornes construites (identifiants 0 à 449). L’identifiant 384 est absent ; l’identifiant 389 apparaît deux fois (n°&nbsp;389 et n°&nbsp;390) — fidèle au PDF.</li>
+          <li>Borne 66 (n°&nbsp;67)&nbsp;: écart ~3,7&nbsp;km entre DMS et UTM. Position carte = DMS.</li>
+          <li>Borne 93 (n°&nbsp;94)&nbsp;: mêmes X/Y que la borne 92, latitudes DMS différentes. Position carte = DMS.</li>
+          <li>Les 350 ayants droit de Soubouo n’ont <strong>pas de coordonnées GPS</strong> dans le listing : ils figurent en tableau. Seule la parcelle <strong>GN-001</strong> (Gnakoragui) est géolocalisée, via ses 29 sommets UTM.</li>
+        </ul>
+
+        <p class="fine">Pour mettre à jour les données, éditez <code>data.js</code> (<code>window.APP_DATA</code>).</p>
+      </article>
+    </section>
+  </div>
+
+  <div class="backdrop" id="backdrop" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="data.js"></script>
+  <script src="script.js"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f"}' crossorigin="anonymous"></script>
+</body>
+</html>
